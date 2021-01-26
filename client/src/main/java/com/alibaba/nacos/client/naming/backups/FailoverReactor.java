@@ -43,6 +43,14 @@ public class FailoverReactor {
 
     private HostReactor hostReactor;
 
+    /**
+     * 通过init()方法，开启三个定时任务
+     * 1.判断容灾开关是否打开，如果打开了就读取容灾缓存文件failoverDir中的数据，否则从服务端获取最新数据。
+     * 2.每隔24小时，把内存中所有的服务数据，写一遍到磁盘中。
+     * 3.每隔10s检查缓存目录是否存在，同时如果缓存里面没有值的话，主动触发一次缓存写磁盘操作。
+     * @param hostReactor
+     * @param cacheDir
+     */
     public FailoverReactor(HostReactor hostReactor, String cacheDir) {
         this.hostReactor = hostReactor;
         this.failoverDir = cacheDir + "/failover";
@@ -64,11 +72,13 @@ public class FailoverReactor {
     private static final long DAY_PERIOD_MINUTES = 24 * 60;
 
     public void init() {
-
+        //每隔5秒 判断一下容灾开关是否打开。(容灾模式下，服务地址读的都是缓存)
         executorService.scheduleWithFixedDelay(new SwitchRefresher(), 0L, 5000L, TimeUnit.MILLISECONDS);
 
+        //每隔24小时，把内存中所有的服务数据，写入到磁盘的容灾缓存文件中
         executorService.scheduleWithFixedDelay(new DiskFileWriter(), 30, DAY_PERIOD_MINUTES, TimeUnit.MINUTES);
 
+        //每隔10秒，检查容灾缓存目录是否存在，同时如果容灾缓存文件里面没有值的话，主动触发一次缓存写磁盘的操作
         // backup file on startup if failover directory is empty.
         executorService.schedule(new Runnable() {
             @Override
@@ -105,6 +115,7 @@ public class FailoverReactor {
         @Override
         public void run() {
             try {
+                //判断是否有容灾开关，容灾开关是一个磁盘文件(../failover00-00---000-VIPSRV_FAILOVER_SWITCH-000---00-00)
                 File switchFile = new File(failoverDir + UtilAndComs.FAILOVER_SWITCH);
                 if (!switchFile.exists()) {
                     switchParams.put("failover-mode", "false");
@@ -116,12 +127,14 @@ public class FailoverReactor {
 
                 if (lastModifiedMillis < modified) {
                     lastModifiedMillis = modified;
+                    //读取容灾开关文件(../failover00-00---000-VIPSRV_FAILOVER_SWITCH-000---00-00)中的列表
                     String failover = ConcurrentDiskUtil.getFileContent(failoverDir + UtilAndComs.FAILOVER_SWITCH,
                         Charset.defaultCharset().toString());
                     if (!StringUtils.isEmpty(failover)) {
                         List<String> lines = Arrays.asList(failover.split(DiskCache.getLineSeparator()));
 
                         for (String line : lines) {
+                            //判定容灾开关是否打开，1表示打开，0表示关闭。
                             String line1 = line.trim();
                             if ("1".equals(line1)) {
                                 switchParams.put("failover-mode", "true");
@@ -143,6 +156,9 @@ public class FailoverReactor {
         }
     }
 
+    /**
+     * 读取容灾缓存文件failoverDir中的值
+     */
     class FailoverFileReader implements Runnable {
 
         @Override
@@ -212,6 +228,9 @@ public class FailoverReactor {
         }
     }
 
+    /**
+     * 写入 容灾缓存文件failoverDir
+     */
     class DiskFileWriter extends TimerTask {
         @Override
         public void run() {

@@ -40,6 +40,7 @@ public class NamingFactory {
 
     public static NamingService createNamingService(Properties properties) throws NacosException {
         try {
+            //通过反射的方式创建NacosNamingService
             Class<?> driverImplClass = Class.forName("com.alibaba.nacos.client.naming.NacosNamingService");
             Constructor constructor = driverImplClass.getConstructor(Properties.class);
             NamingService vendorImpl = (NamingService)constructor.newInstance(properties);

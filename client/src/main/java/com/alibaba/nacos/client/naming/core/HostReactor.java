@@ -79,14 +79,18 @@ public class HostReactor {
         this.eventDispatcher = eventDispatcher;
         this.serverProxy = serverProxy;
         this.cacheDir = cacheDir;
+        //如果开启初始时加载缓存文件
         if (loadCacheAtStart) {
+            //从缓存文件中加载数据到serverInfoMap的内存map中
             this.serviceInfoMap = new ConcurrentHashMap<String, ServiceInfo>(DiskCache.read(this.cacheDir));
         } else {
             this.serviceInfoMap = new ConcurrentHashMap<String, ServiceInfo>(16);
         }
 
         this.updatingMap = new ConcurrentHashMap<String, Object>();
+        //nacos客户端的缓存容灾
         this.failoverReactor = new FailoverReactor(this, cacheDir);
+        //接受服务端的udp请求
         this.pushReceiver = new PushReceiver(this);
     }
 
@@ -181,7 +185,9 @@ public class HostReactor {
             serviceInfo.setJsonFromServer(json);
 
             if (newHosts.size() > 0 || remvHosts.size() > 0 || modHosts.size() > 0) {
+                //把发生变化的service添加到changedServices
                 eventDispatcher.serviceChanged(serviceInfo);
+                //更新本地缓存
                 DiskCache.write(serviceInfo, cacheDir);
             }
 

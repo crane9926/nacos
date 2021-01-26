@@ -114,7 +114,7 @@ public class MysqlHealthCheckProcessor implements HealthCheckProcessor {
                     healthCheckCommon.reEvaluateCheckRT(task.getCheckRTNormalized() * 2, task, switchDomain.getMysqlHealthParams());
                     continue;
                 }
-
+                //执行基于mysql的健康检查任务
                 EXECUTOR.execute(new MysqlCheckTask(ip, task));
                 MetricsMonitor.getMysqlHealthCheckMonitor().incrementAndGet();
             } catch (Exception e) {
@@ -130,6 +130,11 @@ public class MysqlHealthCheckProcessor implements HealthCheckProcessor {
         private HealthCheckTask task;
         private long startTime = System.currentTimeMillis();
 
+        /**
+         * 通过 sql请求是不是抛异常，来进行健康检查
+         * @param ip
+         * @param task
+         */
         public MysqlCheckTask(Instance ip, HealthCheckTask task) {
             this.ip = ip;
             this.task = task;
@@ -145,6 +150,7 @@ public class MysqlHealthCheckProcessor implements HealthCheckProcessor {
 
                 Cluster cluster = task.getCluster();
                 String key = cluster.getService().getName() + ":" + cluster.getName() + ":" + ip.getIp() + ":" + ip.getPort();
+                //创建数据库连接
                 Connection connection = CONNECTION_POOL.get(key);
                 Mysql config = (Mysql) cluster.getHealthChecker();
 

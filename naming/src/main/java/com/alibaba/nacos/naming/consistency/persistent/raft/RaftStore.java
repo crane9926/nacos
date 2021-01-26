@@ -199,6 +199,11 @@ public class RaftStore {
         }
     }
 
+    /**
+     * 写文件的时候，一个key就是一个文件，文件的内容就是value这个json
+     * @param datum
+     * @throws Exception
+     */
     public synchronized void write(final Datum datum) throws Exception {
 
         String namespaceId = KeyBuilder.getNamespace(datum.key);
@@ -275,6 +280,11 @@ public class RaftStore {
         }
     }
 
+    /**
+     * 持久化term到文件
+     * @param term
+     * @throws Exception
+     */
     public void updateTerm(long term) throws Exception {
         File file = new File(metaFileName);
         if (!file.exists() && !file.getParentFile().mkdirs() && !file.createNewFile()) {

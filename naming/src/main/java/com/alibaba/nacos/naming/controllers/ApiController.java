@@ -141,6 +141,12 @@ public class ApiController extends InstanceController {
             agent, clusters, clientIP, udpPort, env, isCheck, app, tenant, healthyOnly);
     }
 
+    /**
+     * 处理http心跳请求
+     * @param request
+     * @return
+     * @throws Exception
+     */
     @CanDistro
     @RequestMapping("/clientBeat")
     public ObjectNode clientBeat(HttpServletRequest request) throws Exception {

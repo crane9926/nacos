@@ -41,6 +41,11 @@ public class EventDispatcher {
     private ConcurrentMap<String, List<EventListener>> observerMap
         = new ConcurrentHashMap<String, List<EventListener>>();
 
+    /**
+     * 一个单独线程从blockQueue中获取事件（这个事件在nacos这里 就是服务端推送下来的数据 即发生变化的服务）。
+     * 然后通知订阅该事件的监听者。
+     *
+     */
     public EventDispatcher() {
 
         executor = Executors.newSingleThreadExecutor(new ThreadFactory() {
@@ -109,6 +114,9 @@ public class EventDispatcher {
         changedServices.add(serviceInfo);
     }
 
+    /**
+     * 从blockQueue：changedServices中，获取发生变化的service，通知订阅了该service的监听者(调用监听者listener的onEvent方法)
+     */
     private class Notifier implements Runnable {
         @Override
         public void run() {

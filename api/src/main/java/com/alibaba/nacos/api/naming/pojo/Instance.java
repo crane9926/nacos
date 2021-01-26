@@ -67,6 +67,7 @@ public class Instance {
 
     /**
      * If instance is ephemeral
+     * 短暂的
      *
      * @since 1.0.0
      */

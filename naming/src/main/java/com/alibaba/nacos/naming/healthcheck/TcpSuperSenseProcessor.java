@@ -38,6 +38,8 @@ import static com.alibaba.nacos.naming.misc.Loggers.SRV_LOG;
 /**
  * TCP health check processor
  *
+ *基于TCP的健康检查处理器
+ *
  * @author nacos
  */
 @Component
@@ -97,7 +99,7 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
     public TcpSuperSenseProcessor() {
         try {
             selector = Selector.open();
-
+            //提交当前任务到线程池，(执行逻辑见run方法)
             TCP_CHECK_EXECUTOR.submit(this);
 
         } catch (Exception e) {
@@ -105,6 +107,10 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
         }
     }
 
+    /**
+     * 把HealthCheckTask任务封装成beat，放入taskQueue。 processTask方法通过获取taskQueue中的任务进行健康检查。
+     * @param task check task
+     */
     @Override
     public void process(HealthCheckTask task) {
         List<Instance> ips = task.getCluster().allIPs(false);
@@ -139,8 +145,13 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
         }
     }
 
+    /**
+     *通过tcp方式执行健康检查任务
+     * @throws Exception
+     */
     private void processTask() throws Exception {
         Collection<Callable<Void>> tasks = new LinkedList<>();
+        //遍历taskQueue中的beat，封装成TaskProcessor线程任务，放入tasks
         do {
             Beat beat = taskQueue.poll(CONNECT_TIMEOUT_MS / 2, TimeUnit.MILLISECONDS);
             if (beat == null) {
@@ -149,7 +160,7 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
 
             tasks.add(new TaskProcessor(beat));
         } while (taskQueue.size() > 0 && tasks.size() < NIO_THREAD_COUNT * 64);
-
+        //通过invokeAll执行tasks中所有的TaskProcessor线程任务
         for (Future<?> f : NIO_EXECUTOR.invokeAll(tasks)) {
             f.get();
         }
@@ -159,6 +170,7 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
     public void run() {
         while (true) {
             try {
+                //通过tcp方式执行健康检查任务
                 processTask();
 
                 int readyCount = selector.selectNow();
@@ -170,7 +182,7 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
                 while (iter.hasNext()) {
                     SelectionKey key = iter.next();
                     iter.remove();
-
+                    //循环执行健康检查的后置处理器，
                     NIO_EXECUTOR.execute(new PostProcessor(key));
                 }
             } catch (Throwable e) {
@@ -353,6 +365,9 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
         }
     }
 
+    /**
+     *TCP 健康检查线程任务
+     */
     private class TaskProcessor implements Callable<Void> {
 
         private static final int MAX_WAIT_TIME_MILLISECONDS = 500;
@@ -361,7 +376,7 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
         public TaskProcessor(Beat beat) {
             this.beat = beat;
         }
-
+       //创建连接，500ms后看连接是否创建成功
         @Override
         public Void call() {
             long waited = System.currentTimeMillis() - beat.getStartTime();
@@ -395,14 +410,14 @@ public class TcpSuperSenseProcessor implements HealthCheckProcessor, Runnable {
 
                 int port = cluster.isUseIPPort4Check() ? instance.getPort() : cluster.getDefCkport();
                 channel.connect(new InetSocketAddress(instance.getIp(), port));
-
+                //注册到selector选择器(NIO)
                 SelectionKey key
                     = channel.register(selector, SelectionKey.OP_CONNECT | SelectionKey.OP_READ);
                 key.attach(beat);
                 keyMap.put(beat.toString(), new BeatKey(key));
 
                 beat.setStartTime(System.currentTimeMillis());
-
+                //检查连接是否创建成功
                 NIO_EXECUTOR.schedule(new TimeOutTask(key),
                     CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
             } catch (Exception e) {

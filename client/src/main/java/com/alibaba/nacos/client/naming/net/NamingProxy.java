@@ -115,14 +115,17 @@ public class NamingProxy {
             }
         });
 
+        //每隔30秒，执行一次refreshSrvIfNeed()
         executorService.scheduleWithFixedDelay(new Runnable() {
             @Override
             public void run() {
+                //通过一个http请求，去endpoint获取nacos server集群的地址列表
                 refreshSrvIfNeed();
             }
         }, 0, vipSrvRefInterMillis, TimeUnit.MILLISECONDS);
 
 
+        //每隔30秒，执行一次login()方法
         executorService.scheduleWithFixedDelay(new Runnable() {
             @Override
             public void run() {
@@ -134,6 +137,10 @@ public class NamingProxy {
         securityProxy.login(getServerList());
     }
 
+    /**
+     * 通过一个http请求，去endpoint获取nacos server集群的地址列表
+     * @return
+     */
     public List<String> getServerListFromEndpoint() {
 
         try {
@@ -174,7 +181,7 @@ public class NamingProxy {
             if (System.currentTimeMillis() - lastSrvRefTime < vipSrvRefInterMillis) {
                 return;
             }
-
+            //通过一个http请求，去endpoint获取nacos server集群的地址列表
             List<String> list = getServerListFromEndpoint();
 
             if (CollectionUtils.isEmpty(list)) {
@@ -321,6 +328,13 @@ public class NamingProxy {
         return reqAPI(UtilAndComs.NACOS_URL_BASE + "/instance/list", params, HttpMethod.GET);
     }
 
+    /**
+     * 向所有nacos服务端发起心跳请求
+     * @param beatInfo
+     * @param lightBeatEnabled
+     * @return
+     * @throws NacosException
+     */
     public JsonNode sendBeat(BeatInfo beatInfo, boolean lightBeatEnabled) throws NacosException {
 
         if (NAMING_LOGGER.isDebugEnabled()) {
@@ -340,6 +354,7 @@ public class NamingProxy {
         params.put(CommonParams.CLUSTER_NAME, beatInfo.getCluster());
         params.put("ip", beatInfo.getIp());
         params.put("port", String.valueOf(beatInfo.getPort()));
+        //向所有nacos服务端发起心跳请求
         String result = reqAPI(UtilAndComs.NACOS_URL_BASE + "/instance/beat", params, body, HttpMethod.PUT);
         return JacksonUtils.toObj(result);
     }
@@ -396,6 +411,15 @@ public class NamingProxy {
         return reqAPI(api, params, StringUtils.EMPTY, method);
     }
 
+    /**
+     * 向所有nacos服务端发起心跳请求
+     * @param api
+     * @param params
+     * @param body
+     * @param method
+     * @return
+     * @throws NacosException
+     */
     public String reqAPI(String api, Map<String, String> params, String body, String method) throws NacosException {
         return reqAPI(api, params, body, getServerList(), method);
     }
@@ -446,6 +470,16 @@ public class NamingProxy {
         throw new NacosException(result.code, result.content);
     }
 
+    /**
+     * 向所有nacos服务端发起心跳请求
+     * @param api
+     * @param params
+     * @param body
+     * @param servers
+     * @param method
+     * @return
+     * @throws NacosException
+     */
     public String reqAPI(String api, Map<String, String> params, String body, List<String> servers, String method) throws NacosException {
 
         params.put(CommonParams.NAMESPACE_ID, getNamespaceId());
@@ -460,7 +494,7 @@ public class NamingProxy {
 
             Random random = new Random(System.currentTimeMillis());
             int index = random.nextInt(servers.size());
-
+            //向所有nacos服务端发起心跳请求
             for (int i = 0; i < servers.size(); i++) {
                 String server = servers.get(index);
                 try {
@@ -476,6 +510,7 @@ public class NamingProxy {
         }
 
         if (StringUtils.isNotBlank(nacosDomain)) {
+            //向所有nacos服务端发起心跳请求
             for (int i = 0; i < UtilAndComs.REQUEST_DOMAIN_RETRY_COUNT; i++) {
                 try {
                     return callServer(api, params, body, nacosDomain, method);

@@ -26,6 +26,8 @@ import org.apache.commons.lang3.RandomUtils;
 
 /**
  * @author nacos
+ *
+ * 健康检查任务类
  */
 public class HealthCheckTask implements Runnable {
 
@@ -55,6 +57,7 @@ public class HealthCheckTask implements Runnable {
         this.cluster = cluster;
         distroMapper = ApplicationUtils.getBean(DistroMapper.class);
         switchDomain = ApplicationUtils.getBean(SwitchDomain.class);
+        //初始化健康检查处理器
         healthCheckProcessor = ApplicationUtils.getBean(HealthCheckProcessorDelegate.class);
         initCheckRT();
     }

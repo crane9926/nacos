@@ -62,6 +62,9 @@ public class PushReceiver implements Runnable {
         }
     }
 
+    /**
+     * 接受服务端的UDP请求(nacos服务端传输发生变化的service到客户端)
+     */
     @Override
     public void run() {
         while (true) {
@@ -78,8 +81,9 @@ public class PushReceiver implements Runnable {
                 PushPacket pushPacket = JacksonUtils.toObj(json, PushPacket.class);
                 String ack;
                 if ("dom".equals(pushPacket.type) || "service".equals(pushPacket.type)) {
+                    //把发生变化的service，通过eventDispatcher.serviceChanged()添加到changedServices
+                    //更新本地缓存
                     hostReactor.processServiceJSON(pushPacket.data);
-
                     // send ack to server
                     ack = "{\"type\": \"push-ack\""
                         + ", \"lastRefTime\":\"" + pushPacket.lastRefTime

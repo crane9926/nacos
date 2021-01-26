@@ -68,24 +68,38 @@ public class RaftController {
     @Autowired
     private RaftCore raftCore;
 
+    /**
+     * 处理选举请求
+     * @param request
+     * @param response
+     * @return
+     * @throws Exception
+     */
     @PostMapping("/vote")
     public JsonNode vote(HttpServletRequest request, HttpServletResponse response) throws Exception {
-
+        // 处理选举请求
         RaftPeer peer = raftCore.receivedVote(
             JacksonUtils.toObj(WebUtils.required(request, "vote"), RaftPeer.class));
 
         return JacksonUtils.transferToJsonNode(peer);
     }
 
+    /**
+     * 收到master的心跳请求
+     * @param request
+     * @param response
+     * @return
+     * @throws Exception
+     */
     @PostMapping("/beat")
     public JsonNode beat(HttpServletRequest request, HttpServletResponse response) throws Exception {
 
         String entity = new String(IoUtils.tryDecompress(request.getInputStream()), StandardCharsets.UTF_8);
         String value = URLDecoder.decode(entity, "UTF-8");
         value = URLDecoder.decode(value, "UTF-8");
-
+        // 解析心跳包
         JsonNode json = JacksonUtils.toObj(value);
-
+        // 处理心跳包,并将本节点的信息作为 response 返回
         RaftPeer peer = raftCore.receivedBeat(JacksonUtils.toObj(json.get("beat").asText()));
 
         return JacksonUtils.transferToJsonNode(peer);
@@ -117,6 +131,13 @@ public class RaftController {
         return "ok";
     }
 
+    /**
+     * 发布内容的入口
+     * @param request
+     * @param response
+     * @return
+     * @throws Exception
+     */
     @PostMapping("/datum")
     public String publish(HttpServletRequest request, HttpServletResponse response) throws Exception {
 
@@ -127,7 +148,7 @@ public class RaftController {
         String entity = IoUtils.toString(request.getInputStream(), "UTF-8");
         String value = URLDecoder.decode(entity, "UTF-8");
         JsonNode json = JacksonUtils.toObj(value);
-
+        // 这里也是调用 RaftConsistencyServiceImpl.put() 进行处理，与服务注册的逻辑在此回合，最终调用到 signalPublish 方法
         String key = json.get("key").asText();
         if (KeyBuilder.matchInstanceListKey(key)) {
             raftConsistencyService.put(key, JacksonUtils.toObj(json.get("value").toString(), Instances.class));
@@ -217,7 +238,7 @@ public class RaftController {
             datum = JacksonUtils.toObj(jsonObject.get("datum").toString(), new TypeReference<Datum<Service>>() {
             });
         }
-
+        // 该方法最终调用到 onPublish 方法
         raftConsistencyService.onPut(datum, source);
         return "ok";
     }

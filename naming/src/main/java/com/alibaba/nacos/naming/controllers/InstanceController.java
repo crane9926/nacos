@@ -109,13 +109,13 @@ public class InstanceController {
 	@PostMapping
 	@Secured(parser = NamingResourceParser.class, action = ActionTypes.WRITE)
 	public String register(HttpServletRequest request) throws Exception {
-
+        // 获取 namespace 和 serviceName
 		final String serviceName = WebUtils.required(request, CommonParams.SERVICE_NAME);
 		final String namespaceId = WebUtils.optional(request, CommonParams.NAMESPACE_ID,
 				Constants.DEFAULT_NAMESPACE_ID);
 
 		final Instance instance = parseInstance(request);
-
+        // 执行注册逻辑
 		serviceManager.registerInstance(namespaceId, serviceName, instance);
 		return "ok";
 	}
@@ -285,6 +285,12 @@ public class InstanceController {
 		throw new NacosException(NacosException.NOT_FOUND, "no matched ip found!");
 	}
 
+    /**
+     * 处理http心跳请求
+     * @param request
+     * @return
+     * @throws Exception
+     */
 	@CanDistro
 	@PutMapping("/beat")
 	@Secured(parser = NamingResourceParser.class, action = ActionTypes.WRITE)
@@ -325,6 +331,7 @@ public class InstanceController {
 		Instance instance = serviceManager
 				.getInstance(namespaceId, serviceName, clusterName, ip, port);
 
+		//如果发送心跳的实例不存在，则创建实例，然后注册。
 		if (instance == null) {
 			if (clientBeat == null) {
 				result.put(CommonParams.CODE, NamingResponseCode.RESOURCE_NOT_FOUND);
@@ -360,6 +367,7 @@ public class InstanceController {
 			clientBeat.setPort(port);
 			clientBeat.setCluster(clusterName);
 		}
+		//处理心跳
 		service.processClientBeat(clientBeat);
 
 		result.put(CommonParams.CODE, NamingResponseCode.OK);

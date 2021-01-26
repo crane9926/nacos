@@ -134,12 +134,19 @@ public class RaftPeerSet implements MemberChangeListener {
         return peers.size();
     }
 
+    /**
+     * 选举leader
+     * 把所有的节点投票信息放到TreeBag，这个可以看成是个按value排序的有序map。排第一的就是得票最多的节点
+     * @param candidate
+     * @return
+     */
     public RaftPeer decideLeader(RaftPeer candidate) {
         peers.put(candidate.ip, candidate);
 
         SortedBag ips = new TreeBag();
         int maxApproveCount = 0;
         String maxApprovePeer = null;
+        // 遍历所有的节点，若 voteFor 不为空，则将节点的 voteFor 添加到 ips 中，记录被选举次数最多的节点和次数
         for (RaftPeer peer : peers.values()) {
             if (StringUtils.isEmpty(peer.voteFor)) {
                 continue;
@@ -152,6 +159,7 @@ public class RaftPeerSet implements MemberChangeListener {
             }
         }
 
+        //如果某个ip被选举的次数大于peers长度的一半,则选举为leader
         if (maxApproveCount >= majorityCount()) {
             RaftPeer peer = peers.get(maxApprovePeer);
             peer.state = RaftPeer.State.LEADER;
@@ -225,6 +233,10 @@ public class RaftPeerSet implements MemberChangeListener {
         return peers.get(server);
     }
 
+    /**
+     * 超过半数，表示选举新的leader成功
+     * @return
+     */
     public int majorityCount() {
         return peers.size() / 2 + 1;
     }

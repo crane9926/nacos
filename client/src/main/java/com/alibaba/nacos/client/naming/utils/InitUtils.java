@@ -38,22 +38,24 @@ public class InitUtils {
     /**
      * Add a difference to the name naming. This method simply initializes the namespace for Naming.
      * Config initialization is not the same, so it cannot be reused directly.
-     *
+     *初始化NameSpace
      * @param properties
      * @return
      */
     public static String initNamespaceForNaming(Properties properties) {
         String tmpNamespace = null;
-
-
+        //传入的properties会指定是否解析云环境中的namespace参数，如果是的，就是去读取阿里云环境的系统变量；
+        // 如果不是，那么就读取properties中指定的namespace，没有指定的话，最终解析出来的是空字符串。
         String isUseCloudNamespaceParsing =
             properties.getProperty(PropertyKeyConst.IS_USE_CLOUD_NAMESPACE_PARSING,
                 System.getProperty(SystemPropertyKeyConst.IS_USE_CLOUD_NAMESPACE_PARSING,
                     String.valueOf(Constants.DEFAULT_USE_CLOUD_NAMESPACE_PARSING)));
 
+        //如果是云上环境
         if (Boolean.parseBoolean(isUseCloudNamespaceParsing)) {
 
             tmpNamespace = TenantUtil.getUserTenantForAns();
+            //从系统变量获取ans.namespace
             tmpNamespace = TemplateUtils.stringEmptyAndThenExecute(tmpNamespace, new Callable<String>() {
                 @Override
                 public String call() {
@@ -62,7 +64,7 @@ public class InitUtils {
                     return namespace;
                 }
             });
-
+            //从系统变量获取ALIBABA_ALIWARE_NAMESPACE
             tmpNamespace = TemplateUtils.stringEmptyAndThenExecute(tmpNamespace, new Callable<String>() {
                 @Override
                 public String call() {
@@ -73,6 +75,7 @@ public class InitUtils {
             });
         }
 
+        //如果不是云上环境，那么从系统变量获取namespace
         tmpNamespace = TemplateUtils.stringEmptyAndThenExecute(tmpNamespace, new Callable<String>() {
             @Override
             public String call() {
@@ -82,10 +85,12 @@ public class InitUtils {
             }
         });
 
+        //如果上面都没有获取到，则从properties中获取namespace
         if (StringUtils.isEmpty(tmpNamespace) && properties != null) {
             tmpNamespace = properties.getProperty(PropertyKeyConst.NAMESPACE);
         }
 
+        //如果还没查到，则获取系统默认的namespace即public
         tmpNamespace = TemplateUtils.stringEmptyAndThenExecute(tmpNamespace, new Callable<String>() {
             @Override
             public String call() {
@@ -97,7 +102,9 @@ public class InitUtils {
 
     public static void initWebRootContext() {
         // support the web context with ali-yun if the app deploy by EDAS
+        //支持阿里云上的webContext
         final String webContext = System.getProperty(SystemPropertyKeyConst.NAMING_WEB_CONTEXT);
+
         TemplateUtils.stringNotEmptyAndThenExecute(webContext, new Runnable() {
             @Override
             public void run() {
@@ -116,6 +123,7 @@ public class InitUtils {
             return "";
         }
         // Whether to enable domain name resolution rules
+        //是否使用endpoint解析，默认为true。getProperty方法的第二个参数即为默认值。
         String isUseEndpointRuleParsing =
             properties.getProperty(PropertyKeyConst.IS_USE_ENDPOINT_PARSING_RULE,
                 System.getProperty(SystemPropertyKeyConst.IS_USE_ENDPOINT_PARSING_RULE,
@@ -123,6 +131,7 @@ public class InitUtils {
 
         boolean isUseEndpointParsingRule = Boolean.parseBoolean(isUseEndpointRuleParsing);
         String endpointUrl;
+        //使用endpoint解析功能
         if (isUseEndpointParsingRule) {
             // Get the set domain name information
             endpointUrl = ParamUtil.parsingEndpointRule(properties.getProperty(PropertyKeyConst.ENDPOINT));
@@ -130,6 +139,7 @@ public class InitUtils {
                 return "";
             }
         } else {
+            //如果不适用endpoint，直接通过properties文件来获取
             endpointUrl = properties.getProperty(PropertyKeyConst.ENDPOINT);
         }
 

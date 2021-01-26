@@ -35,6 +35,7 @@ public class NamingExample {
         properties.setProperty("serverAddr", System.getProperty("serverAddr"));
         properties.setProperty("namespace", System.getProperty("namespace"));
 
+        //创建NamingService
         NamingService naming = NamingFactory.createNamingService(properties);
 
         naming.registerInstance("nacos.test.3", "11.11.11.11", 8888, "TEST1");

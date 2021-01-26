@@ -73,6 +73,10 @@ public class NacosNamingService implements NamingService {
 
     private NamingProxy serverProxy;
 
+    /**
+     * 构造方法
+     * @param serverList
+     */
     public NacosNamingService(String serverList) {
         Properties properties = new Properties();
         properties.setProperty(PropertyKeyConst.SERVER_ADDR, serverList);
@@ -85,16 +89,24 @@ public class NacosNamingService implements NamingService {
 
     private void init(Properties properties) {
         ValidatorUtils.checkInitParam(properties);
+        //初始化命名空间-NameSpace，用于多租户隔离，默认public
         namespace = InitUtils.initNamespaceForNaming(properties);
         InitUtils.initSerialization();
+        //初始化服务器地址
         initServerAddr(properties);
+        //初始化基本的web上下文
         InitUtils.initWebRootContext();
+        //初始化缓存目录，用于存放从服务端获取的服务信息
         initCacheDir();
+        //初始化日志存放路径
         initLogName(properties);
-
+        //事件分发组件：监听nacos服务端传来的:发生变化的service
         eventDispatcher = new EventDispatcher();
+        //通过一个http请求，去endpoint获取nacos server集群的地址列表
         serverProxy = new NamingProxy(namespace, endpoint, serverList, properties);
+        //初始化处理心跳的线程池。实例注册时，在addBeatInfo()方法中执行心跳线程。
         beatReactor = new BeatReactor(serverProxy, initClientBeatThreadCount(properties));
+        //客户端缓存和容灾,接受服务端的udp请求
         hostReactor = new HostReactor(eventDispatcher, serverProxy, cacheDir, isLoadCacheAtStart(properties),
             initPollingThreadCount(properties));
     }
@@ -129,7 +141,10 @@ public class NacosNamingService implements NamingService {
     }
 
     private void initServerAddr(Properties properties) {
+        //从properties中获取服务器地址
         serverList = properties.getProperty(PropertyKeyConst.SERVER_ADDR);
+        //Endpoint是提供一种能力，让客户端能够感知到Nacos服务端的扩缩容，
+        // 说直白一点就是配置一个URL,通过URL可以获取Nacos服务器信息，也就是再也不用通过客户端配置死服务器地址了
         endpoint = InitUtils.initEndpoint(properties);
         if (StringUtils.isNotEmpty(endpoint)) {
             serverList = "";
@@ -187,6 +202,13 @@ public class NacosNamingService implements NamingService {
         registerInstance(serviceName, Constants.DEFAULT_GROUP, instance);
     }
 
+    /**
+     * 注册 心跳
+     * @param serviceName name of service
+     * @param groupName   group of service
+     * @param instance    instance to register
+     * @throws NacosException
+     */
     @Override
     public void registerInstance(String serviceName, String groupName, Instance instance) throws NacosException {
 
@@ -200,7 +222,7 @@ public class NacosNamingService implements NamingService {
             beatInfo.setMetadata(instance.getMetadata());
             beatInfo.setScheduled(false);
             beatInfo.setPeriod(instance.getInstanceHeartBeatInterval());
-
+             //开启心跳任务
             beatReactor.addBeatInfo(NamingUtils.getGroupedName(serviceName, groupName), beatInfo);
         }
 

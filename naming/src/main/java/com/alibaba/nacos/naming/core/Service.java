@@ -111,6 +111,7 @@ public class Service extends com.alibaba.nacos.api.naming.pojo.Service implement
         ClientBeatProcessor clientBeatProcessor = new ClientBeatProcessor();
         clientBeatProcessor.setService(this);
         clientBeatProcessor.setRsInfo(rsInfo);
+        //更新心跳时间和健康状态
         HealthCheckReactor.scheduleNow(clientBeatProcessor);
     }
 
@@ -259,7 +260,7 @@ public class Service extends com.alibaba.nacos.api.naming.pojo.Service implement
     }
 
     public void init() {
-
+        //开启心跳过期检查定时任务(每隔5秒检查一次，没有心跳则下线实例)
         HealthCheckReactor.scheduleCheck(clientBeatCheckTask);
 
         for (Map.Entry<String, Cluster> entry : clusterMap.entrySet()) {

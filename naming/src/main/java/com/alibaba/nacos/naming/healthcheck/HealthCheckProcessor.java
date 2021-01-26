@@ -17,6 +17,9 @@ package com.alibaba.nacos.naming.healthcheck;
 
 /**
  * @author nkorange
+ *
+ * 健康检查处理器接口
+ * 有多种实现类：基于http、基于tcp、基于mysql
  */
 public interface HealthCheckProcessor {
 

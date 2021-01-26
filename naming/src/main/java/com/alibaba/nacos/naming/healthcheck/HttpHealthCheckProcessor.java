@@ -42,6 +42,7 @@ import static com.alibaba.nacos.naming.misc.Loggers.SRV_LOG;
 /**
  * HTTP health check processor
  *
+ * 基于HTTP的健康检查处理器
  * @author xuanyin.zy
  */
 @Component
@@ -131,7 +132,7 @@ public class HttpHealthCheckProcessor implements HealthCheckProcessor {
 
                     builder.setHeader(entry.getKey(), entry.getValue());
                 }
-
+                //执行健康检查，HttpHealthCheckCallback为回调方法类
                 builder.execute(new HttpHealthCheckCallback(ip, task));
                 MetricsMonitor.getHttpHealthCheckMonitor().incrementAndGet();
             } catch (Throwable e) {
@@ -158,6 +159,7 @@ public class HttpHealthCheckProcessor implements HealthCheckProcessor {
             ip.setCheckRT(System.currentTimeMillis() - startTime);
 
             int httpCode = response.getStatusCode();
+            //根据httpCode，更新instance的健康状态
             if (HttpURLConnection.HTTP_OK == httpCode) {
                 healthCheckCommon.checkOK(ip, task, "http:" + httpCode);
                 healthCheckCommon.reEvaluateCheckRT(System.currentTimeMillis() - startTime, task, switchDomain.getHttpHealthParams());

@@ -62,6 +62,11 @@ public class BeatReactor {
         });
     }
 
+    /**
+     * 执行心跳任务
+     * @param serviceName
+     * @param beatInfo
+     */
     public void addBeatInfo(String serviceName, BeatInfo beatInfo) {
         NAMING_LOGGER.info("[BEAT] adding beat: {} to beat map.", beatInfo);
         String key = buildKey(serviceName, beatInfo.getIp(), beatInfo.getPort());
@@ -71,6 +76,7 @@ public class BeatReactor {
             existBeat.setStopped(true);
         }
         dom2Beat.put(key, beatInfo);
+        //执行心跳任务
         executorService.schedule(new BeatTask(beatInfo), beatInfo.getPeriod(), TimeUnit.MILLISECONDS);
         MetricsMonitor.getDom2BeatSizeMonitor().set(dom2Beat.size());
     }
@@ -105,6 +111,7 @@ public class BeatReactor {
             }
             long nextTime = beatInfo.getPeriod();
             try {
+                //向所有nacos服务端发起心跳请求
                 JsonNode result = serverProxy.sendBeat(beatInfo, BeatReactor.this.lightBeatEnabled);
                 long interval = result.get("clientBeatInterval").asInt();
                 boolean lightBeatEnabled = false;

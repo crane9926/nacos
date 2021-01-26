@@ -47,6 +47,12 @@ public class RaftConsistencyServiceImpl implements PersistentConsistencyService 
     @Autowired
     private SwitchDomain switchDomain;
 
+    /**
+     * 实例信息持久化
+     * @param key   key of data, this key should be globally unique
+     * @param value value of data
+     * @throws NacosException
+     */
     @Override
     public void put(String key, Record value) throws NacosException {
         try {
