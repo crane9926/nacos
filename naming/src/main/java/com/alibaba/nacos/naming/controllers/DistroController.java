@@ -39,7 +39,7 @@ import java.util.Map;
 
 /**
  * Restful methods for Partition protocol.
- *
+ *处理distro模式下的请求，distro协议使用的是ap模式
  * @author nkorange
  * @since 1.0.0
  */
@@ -62,6 +62,12 @@ public class DistroController {
     @Autowired
     private SwitchDomain switchDomain;
 
+    /**
+     * 接受其他服务发送过来的同步数据
+     * @param dataMap
+     * @return
+     * @throws Exception
+     */
     @PutMapping("/datum")
     public ResponseEntity onSyncDatum(@RequestBody Map<String, Datum<Instances>> dataMap) throws Exception {
 
@@ -84,9 +90,17 @@ public class DistroController {
         return ResponseEntity.ok("ok");
     }
 
+    /**
+     * 接受其他服务的定时任务同步的数据
+     *
+     * 因为量比较大，同步过来的只是变化的key, 需要自己根据key去主动拉取数据。
+     * @param source
+     * @param dataMap
+     * @return
+     */
     @PutMapping("/checksum")
     public ResponseEntity syncChecksum(@RequestParam String source, @RequestBody Map<String, String> dataMap) {
-
+        // 数据接收操作
         consistencyService.onReceiveChecksums(dataMap, source);
         return ResponseEntity.ok("ok");
     }
@@ -110,6 +124,10 @@ public class DistroController {
         return ResponseEntity.ok(content);
     }
 
+    /**
+     * 获取缓存中的数据
+     * @return
+     */
     @GetMapping("/datums")
     public ResponseEntity getAllDatums() {
         String content = new String(serializer.serialize(dataStore.getDataMap()), StandardCharsets.UTF_8);

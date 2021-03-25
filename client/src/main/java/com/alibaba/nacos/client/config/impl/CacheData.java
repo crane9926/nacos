@@ -168,9 +168,13 @@ public class CacheData {
         return "CacheData [" + dataId + ", " + group + "]";
     }
 
+    /**
+     * 遍历用户自己添加的监听器，如果发现数据的md5值不同，则发送通知
+     */
     void checkListenerMd5() {
         for (ManagerListenerWrap wrap : listeners) {
             if (!md5.equals(wrap.lastCallMd5)) {
+                //触发通知
                 safeNotifyListener(dataId, group, content, type, md5, wrap);
             }
         }
@@ -199,7 +203,9 @@ public class CacheData {
                     cr.setGroup(group);
                     cr.setContent(content);
                     configFilterChainManager.doFilter(null, cr);
+                    //获取最新的配置信息
                     String contentTmp = cr.getContent();
+                    //调用 Listener 的回调方法，将最新的配置信息作为参数传入
                     listener.receiveConfigInfo(contentTmp);
 
                     // compare lastContent and content
@@ -209,7 +215,7 @@ public class CacheData {
                         ((AbstractConfigChangeListener)listener).receiveConfigChange(event);
                         listenerWrap.lastContent = content;
                     }
-
+                    //最后更新 ListenerWrap 的 md5 值
                     listenerWrap.lastCallMd5 = md5;
                     LOGGER.info("[{}] [notify-ok] dataId={}, group={}, md5={}, listener={} ", name, dataId, group, md5,
                         listener);

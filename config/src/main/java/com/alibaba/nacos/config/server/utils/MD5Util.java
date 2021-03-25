@@ -52,6 +52,7 @@ public class MD5Util {
             String groupKey = entry.getKey();
             String clientMd5 = entry.getValue();
             String ip = RequestUtil.getRemoteIp(request);
+            //对比客户端配置md5和服务端缓存的配置md5
             boolean isUptodate = ConfigService.isUptodate(groupKey, clientMd5, ip, tag);
             if (!isUptodate) {
                 changedGroupKeys.add(groupKey);

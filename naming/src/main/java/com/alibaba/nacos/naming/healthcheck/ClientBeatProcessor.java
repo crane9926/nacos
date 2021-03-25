@@ -84,6 +84,7 @@ public class ClientBeatProcessor implements Runnable {
                         instance.setHealthy(true);
                         Loggers.EVT_LOG.info("service: {} {POS} {IP-ENABLED} valid: {}:{}@{}, region: {}, msg: client beat ok",
                             cluster.getService().getName(), ip, port, cluster.getName(), UtilsAndCommons.LOCALHOST_SITE);
+                        //实例心跳从非健康状态变为健康状态则触发ServiceChangeEvent事件
                         getPushService().serviceChanged(service);
                     }
                 }

@@ -77,8 +77,10 @@ public class NacosConfigService implements ConfigService {
             encode = encodeTmp.trim();
         }
         initNamespace(properties);
+        // 封装了MetricsHttpAgent，能够实现数据信息上报到metrics
         agent = new MetricsHttpAgent(new ServerHttpAgent(properties));
         agent.start();
+        // 这里会初始化一个客户端工作类
         worker = new ClientWorker(agent, configFilterChainManager, properties);
     }
 

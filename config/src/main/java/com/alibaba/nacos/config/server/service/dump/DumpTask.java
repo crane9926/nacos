@@ -163,6 +163,7 @@ class DumpProcessor implements TaskProcessor {
             return result;
         } else {
             if (StringUtils.isBlank(tag)) {
+                //查询配置信息；数据库原子操作，最小sql动作，无业务封装
                 ConfigInfo cf = persistService.findConfigInfo(dataId, group, tenant);
                 if (dataId.equals(AggrWhitelist.AGGRIDS_METADATA)) {
                     if (null != cf) {
@@ -189,7 +190,7 @@ class DumpProcessor implements TaskProcessor {
                 }
 
                 boolean result;
-                if (null != cf) {
+                if (null != cf) {//保存最新配置到磁盘
                     result = ConfigService.dump(dataId, group, tenant, cf.getContent(), lastModified, cf.getType());
 
                     if (result) {

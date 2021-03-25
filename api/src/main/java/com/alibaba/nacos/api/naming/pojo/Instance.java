@@ -68,7 +68,7 @@ public class Instance {
     /**
      * If instance is ephemeral
      * 短暂的
-     *
+     *默认是临时实例，使用ap模式
      * @since 1.0.0
      */
     private boolean ephemeral = true;

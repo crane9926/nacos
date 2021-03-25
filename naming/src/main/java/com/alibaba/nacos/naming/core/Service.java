@@ -177,7 +177,7 @@ public class Service extends com.alibaba.nacos.api.naming.pojo.Service implement
                 instance.setWeight(0.01D);
             }
         }
-
+        //触发pushService的serviceChange事件
         updateIPs(value.getInstanceList(), KeyBuilder.matchEphemeralInstanceListKey(key));
 
         recalculateChecksum();
@@ -247,6 +247,7 @@ public class Service extends com.alibaba.nacos.api.naming.pojo.Service implement
         }
 
         setLastModifiedMillis(System.currentTimeMillis());
+        //触发pushService的serviceChange事件
         getPushService().serviceChanged(this);
         StringBuilder stringBuilder = new StringBuilder();
 

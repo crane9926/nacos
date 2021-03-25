@@ -64,6 +64,7 @@ public class ConfigServletInner {
 
     /**
      * 轮询接口
+     *
      */
     public String doPollingConfig(HttpServletRequest request, HttpServletResponse response,
                                   Map<String, String> clientMd5Map, int probeRequestSize)
@@ -71,6 +72,7 @@ public class ConfigServletInner {
 
         // 长轮询
         if (LongPollingService.isSupportLongPolling(request)) {
+            //支持长轮询的情况下，需要阻塞请求的返回
             longPollingService.addLongPollingClient(request, response, clientMd5Map, probeRequestSize);
             return HttpServletResponse.SC_OK + "";
         }

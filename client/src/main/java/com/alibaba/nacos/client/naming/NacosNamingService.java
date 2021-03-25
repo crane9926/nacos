@@ -212,7 +212,7 @@ public class NacosNamingService implements NamingService {
     @Override
     public void registerInstance(String serviceName, String groupName, Instance instance) throws NacosException {
 
-        if (instance.isEphemeral()) {
+        if (instance.isEphemeral()) {//如果是临时实例，默认使用ap
             BeatInfo beatInfo = new BeatInfo();
             beatInfo.setServiceName(NamingUtils.getGroupedName(serviceName, groupName));
             beatInfo.setIp(instance.getIp());

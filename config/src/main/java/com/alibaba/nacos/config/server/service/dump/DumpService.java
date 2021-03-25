@@ -73,6 +73,12 @@ import static com.alibaba.nacos.config.server.utils.LogUtil.fatalLog;
 /**
  * Dump data service
  *
+ * 它会定时把数据库变更后的数据dump到磁盘上
+ *
+ * DumpService在spring启动之后，会调用init方法启动几个dump任务。然后在任务执行结束之后，会触发一个LocalDataChangeEvent 的事件
+ *
+ * 在ConfigCacheService中，只要涉及到config配置信息的修改的，都会发布LocalDataChangeEvent事件
+ *
  * @author Nacos
  */
 @Service
@@ -224,6 +230,7 @@ public class DumpService {
 			};
 
 			try {
+                //全量Dump配置信息
 				dumpConfigInfo(dumpAllProcessor);
 
 				// 更新beta缓存

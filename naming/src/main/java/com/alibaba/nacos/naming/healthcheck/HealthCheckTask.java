@@ -73,6 +73,7 @@ public class HealthCheckTask implements Runnable {
     public void run() {
 
         try {
+            //健康检查时，只检查自己为权威节点的数据
             if (distroMapper.responsible(cluster.getService().getName()) &&
                 switchDomain.isHealthCheckEnabled(cluster.getService().getName())) {
                 healthCheckProcessor.process(this);

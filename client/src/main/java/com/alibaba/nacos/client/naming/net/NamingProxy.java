@@ -329,7 +329,7 @@ public class NamingProxy {
     }
 
     /**
-     * 向所有nacos服务端发起心跳请求
+     * 向nacos服务端发起心跳请求
      * @param beatInfo
      * @param lightBeatEnabled
      * @return
@@ -354,7 +354,7 @@ public class NamingProxy {
         params.put(CommonParams.CLUSTER_NAME, beatInfo.getCluster());
         params.put("ip", beatInfo.getIp());
         params.put("port", String.valueOf(beatInfo.getPort()));
-        //向所有nacos服务端发起心跳请求
+        //向nacos服务端发起心跳请求
         String result = reqAPI(UtilAndComs.NACOS_URL_BASE + "/instance/beat", params, body, HttpMethod.PUT);
         return JacksonUtils.toObj(result);
     }
@@ -423,7 +423,7 @@ public class NamingProxy {
     public String reqAPI(String api, Map<String, String> params, String body, String method) throws NacosException {
         return reqAPI(api, params, body, getServerList(), method);
     }
-
+    //获取服务端列表
     private List<String> getServerList() {
         List<String> snapshot = serversFromEndpoint;
         if (!CollectionUtils.isEmpty(serverList)) {

@@ -50,14 +50,17 @@ public class TaskDispatcher {
 
     @PostConstruct
     public void init() {
+        // 构建任务执行器
         for (int i = 0; i < cpuCoreCount; i++) {
             TaskScheduler taskScheduler = new TaskScheduler(i);
             taskSchedulerList.add(taskScheduler);
+            // 任务调度执行器提交
             GlobalExecutor.submitTaskDispatch(taskScheduler);
         }
     }
 
     public void addTask(String key) {
+        // 根据 Key 进行 Hash 找到一个 TaskScheduler 进行任务提交
         taskSchedulerList.get(UtilsAndCommons.shakeUp(key, cpuCoreCount)).addTask(key);
     }
 
@@ -90,14 +93,14 @@ public class TaskDispatcher {
             while (true) {
 
                 try {
-
+                    // 从任务缓存队列中获取一个任务（存在超时设置）
                     String key = queue.poll(partitionConfig.getTaskDispatchPeriod(),
                         TimeUnit.MILLISECONDS);
 
                     if (Loggers.DISTRO.isDebugEnabled() && StringUtils.isNotBlank(key)) {
                         Loggers.DISTRO.debug("got key: {}", key);
                     }
-
+                    // 如果不存在集群或者集群节点为空
                     if (dataSyncer.getServers() == null || dataSyncer.getServers().isEmpty()) {
                         continue;
                     }
@@ -109,17 +112,19 @@ public class TaskDispatcher {
                     if (dataSize == 0) {
                         keys = new ArrayList<>();
                     }
-
+                    // 进行批量任务处理，这里做一次暂存操作，为了避免
                     keys.add(key);
                     dataSize++;
-
+                    //如果更新的数据达到一定的数量这里默认是1000，
+                    // 或者说距离上一次发送已经超过了一定的时间这里默认是2s，都会进行一个发送
                     if (dataSize == partitionConfig.getBatchSyncKeyCount() ||
                         (System.currentTimeMillis() - lastDispatchTime) > partitionConfig.getTaskDispatchPeriod()) {
-
+                        // 为每一个server创建一个SyncTask任务
                         for (Member member : dataSyncer.getServers()) {
                             if (NetUtils.localServer().equals(member.getAddress())) {
                                 continue;
                             }
+                            //生成一个SyncTask然后放到线程池中进行异步发送。
                             SyncTask syncTask = new SyncTask();
                             syncTask.setKeys(keys);
                             syncTask.setTargetServer(member.getAddress());
@@ -127,7 +132,8 @@ public class TaskDispatcher {
                             if (Loggers.DISTRO.isDebugEnabled() && StringUtils.isNotBlank(key)) {
                                 Loggers.DISTRO.debug("add sync task: {}", JacksonUtils.toJson(syncTask));
                             }
-
+                            //把发生变化的数据同步到其他服务器
+                            //进行任务提交，同时设置任务延迟执行时间，这里设置为立即执行
                             dataSyncer.submit(syncTask, 0);
                         }
                         lastDispatchTime = System.currentTimeMillis();

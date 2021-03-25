@@ -52,6 +52,10 @@ import java.util.Map;
 
 /**
  * @author nacos
+ * ServletFilter会对每个请求做一些过滤，如果发现这个请求不是自己的，
+ * 那么就会转发这个请求到对应的服务器进行处理，收到结果之后再返回给用户
+ *
+ * 转发的动作是同步的，可以优化成异步，并且开启serlvet的异步
  */
 public class DistroFilter implements Filter {
 
@@ -143,13 +147,14 @@ public class DistroFilter implements Filter {
 						.toString(req.getInputStream(), Charsets.UTF_8.name());
 				final Map<String, String> paramsValue = HttpClient
 						.translateParameterMap(req.getParameterMap());
-
+                //往目标服务器转发请求
 				HttpClient.HttpResult result = HttpClient
 						.request("http://" + targetServer + req.getRequestURI(),
 								headerList, paramsValue, body, PROXY_CONNECT_TIMEOUT,
 								PROXY_READ_TIMEOUT, Charsets.UTF_8.name(),
 								req.getMethod());
 				try {
+				    //把结果返回给客户端
 					WebUtils.response(resp, result.content, result.code);
 				}
 				catch (Exception ignore) {

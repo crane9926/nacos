@@ -55,7 +55,7 @@ public class ConfigService {
     }
 
     /**
-     * 保存配置文件，并缓存md5.
+     * 保存配置到磁盘文件，并缓存md5.
      */
     static public boolean dump(String dataId, String group, String tenant, String content, long lastModifiedTs, String type) {
         String groupKey = GroupKey2.getKey(dataId, group, tenant);
@@ -78,8 +78,10 @@ public class ConfigService {
                         + "lastModifiedNew={}",
                     groupKey, md5, ConfigService.getLastModifiedTs(groupKey), lastModifiedTs);
             } else if (!PropertyUtil.isDirectRead()) {
+                //保存到磁盘
                 DiskUtil.saveToDisk(dataId, group, tenant, content);
             }
+            //更新md5，并且发布LocalDataChangeEvent事件
             updateMd5(groupKey, md5, lastModifiedTs);
             return true;
         } catch (IOException ioe) {
@@ -413,6 +415,7 @@ public class ConfigService {
         if (cache.md5 == null || !cache.md5.equals(md5)) {
             cache.md5 = md5;
             cache.lastModifiedTs = lastModifiedTs;
+            // 发布LocalDataChangeEvent事件
             EventDispatcher.fireEvent(new LocalDataChangeEvent(groupKey));
         }
     }

@@ -111,7 +111,7 @@ public class BeatReactor {
             }
             long nextTime = beatInfo.getPeriod();
             try {
-                //向所有nacos服务端发起心跳请求
+                //向nacos服务端发起心跳请求
                 JsonNode result = serverProxy.sendBeat(beatInfo, BeatReactor.this.lightBeatEnabled);
                 long interval = result.get("clientBeatInterval").asInt();
                 boolean lightBeatEnabled = false;

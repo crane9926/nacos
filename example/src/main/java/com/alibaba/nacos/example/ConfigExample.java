@@ -39,6 +39,7 @@ public class ConfigExample {
         ConfigService configService = NacosFactory.createConfigService(properties);
         String content = configService.getConfig(dataId, group, 5000);
         System.out.println(content);
+        //客户端添加配置变更监听，变更则会调用监听器的回调函数
         configService.addListener(dataId, group, new Listener() {
             @Override
             public void receiveConfigInfo(String configInfo) {

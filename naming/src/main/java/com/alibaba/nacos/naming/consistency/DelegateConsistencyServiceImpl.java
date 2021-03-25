@@ -26,6 +26,9 @@ import org.springframework.stereotype.Service;
 /**
  * Consistency delegate
  *
+ * 通过这两种方式：TaskDispatcher实时的更新和TimedSync定时的更新
+ * 我们就可以保证所有的Nacos节点上的数据最后都是最终一致。
+ *
  * @author nkorange
  * @since 1.0.0
  */
@@ -77,6 +80,7 @@ public class DelegateConsistencyServiceImpl implements ConsistencyService {
         return ephemeralConsistencyService.isAvailable() && persistentConsistencyService.isAvailable();
     }
 
+    //通过ephemeralConsistencyService和persistentConsistencyService指定是AP或者是CP
     private ConsistencyService mapConsistencyService(String key) {
         return KeyBuilder.matchEphemeralKey(key) ? ephemeralConsistencyService : persistentConsistencyService;
     }

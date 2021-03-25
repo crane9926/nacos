@@ -204,25 +204,36 @@ public class LongPollingService extends AbstractEventListener {
         return null;
     }
 
+    /**
+     * 从方法名字上可以推测出，这个方法应该是把客户端的长轮训请求添加到某个任务中去
+     * 1. 获得客户端传递过来的超时时间，并且进行本地计算，提前500ms返回响应，这就能解释为什么客户端响应超时时间是29.5+了。当然如果isFixedPolling=true的情况下，不会提前返回响应
+     * 2. 根据客户端请求过来的md5和服务器端对应的group下对应内容的md5进行比较，如果不一致，则通过generateResponse将结果返回
+     * 3. 如果配置文件没有发生变化，则通过scheduler.execute 启动了一个定时任务，将客户端的长轮询请求封装成一个叫 ClientLongPolling 的任务，交给 scheduler 去执行
+     * @param req
+     * @param rsp
+     * @param clientMd5Map
+     * @param probeRequestSize
+     */
     public void addLongPollingClient(HttpServletRequest req, HttpServletResponse rsp, Map<String, String> clientMd5Map,
                                      int probeRequestSize) {
 
-        String str = req.getHeader(LongPollingService.LONG_POLLING_HEADER);
+        String str = req.getHeader(LongPollingService.LONG_POLLING_HEADER);//获得客户端传递过来的超时时间,默认为30s
         String noHangUpFlag = req.getHeader(LongPollingService.LONG_POLLING_NO_HANG_UP_HEADER);
         String appName = req.getHeader(RequestUtil.CLIENT_APPNAME_HEADER);
         String tag = req.getHeader("Vipserver-Tag");
         int delayTime = SwitchService.getSwitchInteger(SwitchService.FIXED_DELAY_TIME, 500);
-        /**
-         * 提前500ms返回响应，为避免客户端超时 @qiaoyi.dingqy 2013.10.22改动  add delay time for LoadBalance
-         */
-        long timeout = Math.max(10000, Long.parseLong(str) - delayTime);
-        if (isFixedPolling()) {
+
+        //为了避免客户端请求超时，将客户端传递过来的超时时间缩短一定时间，默认500ms，保证能在客户端请求超时前进行返回
+        long timeout = Math.max(10000, Long.parseLong(str) - delayTime);//29.5s
+        if (isFixedPolling()) {//如果isFixedPolling=true的情况下，不会提前返回响应
             timeout = Math.max(10000, getFixedPollingInterval());
             // do nothing but set fix polling timeout
         } else {
             long start = System.currentTimeMillis();
+            //对比客户端配置的md5是否发生变化
             List<String> changedGroups = MD5Util.compareMd5(req, rsp, clientMd5Map);
             if (changedGroups.size() > 0) {
+                // 通过该方法直接返回数据，结束长轮询
                 generateResponse(req, rsp, changedGroups);
                 LogUtil.clientLog.info("{}|{}|{}|{}|{}|{}|{}",
                     System.currentTimeMillis() - start, "instant", RequestUtil.getRemoteIp(req), "polling",
@@ -237,10 +248,12 @@ public class LongPollingService extends AbstractEventListener {
         }
         String ip = RequestUtil.getRemoteIp(req);
         // 一定要由HTTP线程调用，否则离开后容器会立即发送响应
-        final AsyncContext asyncContext = req.startAsync();
+        //得到AsyncContext实例之后,就会先释放容器分配给请求的线程与相关资源,
+        // 然后把把实例放入了一个定时任务里面;等时间到了或者有配置变更之后,调用complete()响应完成
+        final AsyncContext asyncContext = req.startAsync();//开启HttpServletRequest中的asyncContext
         // AsyncContext.setTimeout()的超时时间不准，所以只能自己控制
         asyncContext.setTimeout(0L);
-
+        //执行长轮询线程任务ClientLongPolling
         scheduler.execute(
             new ClientLongPolling(asyncContext, clientMd5Map, ip, probeRequestSize, timeout, appName, tag));
     }
@@ -257,8 +270,10 @@ public class LongPollingService extends AbstractEventListener {
         if (isFixedPolling()) {
             // ignore
         } else {
+            //如果是LocalDataChangeEvent事件,添加到DataChangeTask任务中.
             if (event instanceof LocalDataChangeEvent) {
                 LocalDataChangeEvent evt = (LocalDataChangeEvent)event;
+                // 当触发LocalDataChangeEvent事件的时候，会调度DataChangeTask任务。
                 scheduler.execute(new DataChangeTask(evt.groupKey, evt.isBeta, evt.betaIps));
             }
         }
@@ -270,6 +285,7 @@ public class LongPollingService extends AbstractEventListener {
 
     @SuppressWarnings("PMD.ThreadPoolCreationRule")
     public LongPollingService() {
+        // 初始化存放客户端长轮询连接的队列
         allSubs = new ConcurrentLinkedQueue<ClientLongPolling>();
 
         scheduler = Executors.newScheduledThreadPool(1, new ThreadFactory() {
@@ -298,13 +314,16 @@ public class LongPollingService extends AbstractEventListener {
 
     // =================
 
+    //数据变化的任务：有数据变化时执行该任务，遍历allSubs队列中的客户端请求
     class DataChangeTask implements Runnable {
         @Override
         public void run() {
             try {
                 ConfigService.getContentBetaMd5(groupKey);
+                // 遍历allSubs队列
                 for (Iterator<ClientLongPolling> iter = allSubs.iterator(); iter.hasNext(); ) {
                     ClientLongPolling clientSub = iter.next();
+                    // 根据当前触发事件的配置找到对应的长轮询连接
                     if (clientSub.clientMd5Map.containsKey(groupKey)) {
                         // 如果beta发布且不在beta列表直接跳过
                         if (isBeta && !betaIps.contains(clientSub.ip)) {
@@ -317,13 +336,14 @@ public class LongPollingService extends AbstractEventListener {
                         }
 
                         getRetainIps().put(clientSub.ip, System.currentTimeMillis());
-                        iter.remove(); // 删除订阅关系
+                        iter.remove(); //将当前触发了事件的长轮询连接从allSubs中剔除
                         LogUtil.clientLog.info("{}|{}|{}|{}|{}|{}|{}",
                             (System.currentTimeMillis() - changeTime),
                             "in-advance",
                             RequestUtil.getRemoteIp((HttpServletRequest)clientSub.asyncContext.getRequest()),
                             "polling",
                             clientSub.clientMd5Map.size(), clientSub.probeRequestSize, groupKey);
+                        // 直接发送返回信息，并且会把延时调度任务当前的asyncTimeoutFuture结束
                         clientSub.sendResponse(Arrays.asList(groupKey));
                     }
                 }
@@ -365,18 +385,25 @@ public class LongPollingService extends AbstractEventListener {
     }
 
     // =================
+     //一共做两件事：
 
+    //一个是执行一个延时调度任务(,这个任务要阻塞29.5s才能执行，因为立马执行没有任何意义，毕竟前面addLongPollingClient中已经执行过一次了。
+    //如果29.5秒内发生变化怎么办？？ allSubs！！！！ )，
+
+    // 一个是将当前长轮询连接放入allSubs队列中。
     class ClientLongPolling implements Runnable {
 
         @Override
         public void run() {
+            //延迟调度任务
             asyncTimeoutFuture = scheduler.schedule(new Runnable() {
+                //延迟29.5秒执行该任务：（从队列中删除当前长轮询连接实例，判断是否有变化，有变化则返回，无变化也返回。当前这次长轮询结束）
                 @Override
                 public void run() {
                     try {
                         getRetainIps().put(ClientLongPolling.this.ip, System.currentTimeMillis());
                         /**
-                         * 删除订阅关系
+                         * 从队列中删除当前长轮询连接实例
                          */
                         allSubs.remove(ClientLongPolling.this);
 
@@ -407,19 +434,20 @@ public class LongPollingService extends AbstractEventListener {
                     }
 
                 }
-
+                // 延迟执行的时间由前面传入,timeoutTime=29.5s
             }, timeoutTime, TimeUnit.MILLISECONDS);
 
+
+            // 将当前长轮询连接ClientLongPolling任务放到allSubs队列中。等待DataChangeTask数据变化任务触发执行
             allSubs.add(this);
         }
 
         void sendResponse(List<String> changedGroups) {
-            /**
-             *  取消超时任务
-             */
             if (null != asyncTimeoutFuture) {
+                //取消延时任务
                 asyncTimeoutFuture.cancel(false);
             }
+            //响应请求
             generateResponse(changedGroups);
         }
 
@@ -488,7 +516,7 @@ public class LongPollingService extends AbstractEventListener {
             response.setDateHeader("Expires", 0);
             response.setHeader("Cache-Control", "no-cache,no-store");
             response.setStatus(HttpServletResponse.SC_OK);
-            response.getWriter().println(respString);
+            response.getWriter().println(respString);//返回变化的结果
         } catch (Exception se) {
             pullLog.error(se.toString(), se);
         }

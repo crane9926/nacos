@@ -81,7 +81,7 @@ public class ServiceManager implements RecordListener<Service> {
     private Synchronizer synchronizer = new ServiceStatusSynchronizer();
 
     private final Lock lock = new ReentrantLock();
-
+    //指定调用consistencyDelegate这个service
     @Resource(name = "consistencyDelegate")
     private ConsistencyService consistencyService;
 
@@ -117,7 +117,7 @@ public class ServiceManager implements RecordListener<Service> {
     public void init() {
 
         UtilsAndCommons.SERVICE_SYNCHRONIZATION_EXECUTOR.schedule(new ServiceReporter(), 60000, TimeUnit.MILLISECONDS);
-
+        //开启更新实例状态的线程任务
         UtilsAndCommons.SERVICE_UPDATE_EXECUTOR.submit(new UpdatedServiceProcessor());
 
         if (emptyServiceAutoClean) {
@@ -428,7 +428,7 @@ public class ServiceManager implements RecordListener<Service> {
             service.validate();
             //把新建的service存入到map中
             putServiceAndInit(service);
-            if (!local) {
+            if (!local) {//如果不是临时实例的服务
                 addOrReplaceService(service);
             }
         }
@@ -498,6 +498,8 @@ public class ServiceManager implements RecordListener<Service> {
             Instances instances = new Instances();
             instances.setInstanceList(instanceList);
             // 将 instance 信息持久化
+            // (通过@Resource(name = "consistencyDelegate")指定调用consistencyDelegate这个service，
+            // 此时区分AP和CP)
             consistencyService.put(key, instances);
         }
     }
@@ -796,7 +798,7 @@ public class ServiceManager implements RecordListener<Service> {
         }
     }
 
-
+    //空服务清理任务
     private class EmptyServiceAutoClean implements Runnable {
 
         @Override
@@ -829,6 +831,7 @@ public class ServiceManager implements RecordListener<Service> {
                             Loggers.SRV_LOG.warn("namespace : {}, [{}] services are automatically cleaned",
                                     namespace, serviceName);
                             try {
+                                //服务删除
                                 easyRemoveService(namespace, serviceName);
                             } catch (Exception e) {
                                 Loggers.SRV_LOG.error("namespace : {}, [{}] services are automatically clean has " +

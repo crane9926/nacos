@@ -118,7 +118,8 @@ public class EventDispatcher {
 
     static public abstract class AbstractEventListener {
 
-        public AbstractEventListener() {
+        public AbstractEventListener() {//子类构造方法执行时，会先调该方法，
+            // 通过addEventListener把子类关心的事件类型添加到listeners中。
             /**
              * automatic register
              */

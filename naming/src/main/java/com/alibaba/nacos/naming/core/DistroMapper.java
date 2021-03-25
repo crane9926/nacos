@@ -35,6 +35,9 @@ import java.util.Objects;
 
 /**
  * @author nkorange
+ * 权威Server的判断器
+ *
+ * Distro协议的一个重要部分，根据数据进行 Hash 计算查找集群节点列表中的权威节点
  */
 @Component("distroMapper")
 public class DistroMapper implements MemberChangeListener {
@@ -66,6 +69,12 @@ public class DistroMapper implements MemberChangeListener {
         this.healthyList = MemberUtils.simpleMembers(memberManager.allMembers());
     }
 
+    /**
+     * 判断该数据是否可以由本节点进行响应
+     * @param cluster
+     * @param instance
+     * @return
+     */
     public boolean responsible(Cluster cluster, Instance instance) {
         return switchDomain.isHealthCheckEnabled(cluster.getServiceName())
             && !cluster.getHealthCheckTask().isCancelled()
@@ -73,6 +82,12 @@ public class DistroMapper implements MemberChangeListener {
             && cluster.contains(instance);
     }
 
+    /**
+     * 根据 ServiceName 进行 Hash 计算，找到对应的权威节点的索引，
+     * 判断是否是本节点，是的话表明该数据可以由本节点进行处理
+     * @param serviceName
+     * @return
+     */
     public boolean responsible(String serviceName) {
         final List<String> servers = healthyList;
 
@@ -90,11 +105,16 @@ public class DistroMapper implements MemberChangeListener {
         if (lastIndex < 0 || index < 0) {
             return true;
         }
-
+        //hash取模
         int target = distroHash(serviceName) % servers.size();
         return target >= index && target <= lastIndex;
     }
 
+    /**
+     * 根据 ServiceName 找到权威 Server 的地址
+     * @param serviceName
+     * @return
+     */
     public String mapSrv(String serviceName) {
         final List<String> servers = healthyList;
 

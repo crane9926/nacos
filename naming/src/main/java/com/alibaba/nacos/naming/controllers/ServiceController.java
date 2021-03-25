@@ -103,6 +103,13 @@ public class ServiceController {
         return "ok";
     }
 
+    /**
+     * 服务删除
+     * @param namespaceId
+     * @param serviceName
+     * @return
+     * @throws Exception
+     */
     @DeleteMapping
     @Secured(parser = NamingResourceParser.class, action = ActionTypes.WRITE)
     public String remove(@RequestParam(defaultValue = Constants.DEFAULT_NAMESPACE_ID) String namespaceId,

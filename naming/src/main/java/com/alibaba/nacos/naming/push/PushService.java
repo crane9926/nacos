@@ -46,6 +46,12 @@ import java.util.zip.GZIPOutputStream;
 
 /**
  * @author nacos
+ *
+ * PushService实现了ApplicationContextAware、ApplicationListener<ServiceChangeEvent>接口；
+ * 它有两个ScheduledExecutorService，一个用于retransmitter，一个用于udpSender；
+ * 其static代码块创建了一个deamon线程执行Receiver，同时注册了一个定时任务执行removeClientIfZombie，
+ * 它会遍历clientMap，移除zombie的client。
+ *
  */
 @Component
 public class PushService implements ApplicationContextAware, ApplicationListener<ServiceChangeEvent> {
@@ -130,6 +136,15 @@ public class PushService implements ApplicationContextAware, ApplicationListener
         this.applicationContext = applicationContext;
     }
 
+    /**
+     * onApplicationEvent会处理ServiceChangeEvent，它会注册一个延时任务并将该future放入futureMap；
+     * 该延时任务会从clientMap获取指定namespaceId, serviceName的clients；然后遍历clients判断是否是zombie，
+     * 如果是的话则移除该client，否则创建Receiver.AckEntry，然后执行udpPush(ackEntry)，最后从futureMap移除该future；
+     *
+     * serviceChanged方法 提供给外部其他方法调用 用于发布ServiceChangeEvent。
+     *
+     * @param event
+     */
     @Override
     public void onApplicationEvent(ServiceChangeEvent event) {
         Service service = event.getService();
@@ -180,7 +195,7 @@ public class PushService implements ApplicationContextAware, ApplicationListener
 
                         Loggers.PUSH.info("serviceName: {} changed, schedule push for: {}, agent: {}, key: {}",
                             client.getServiceName(), client.getAddrStr(), client.getAgent(), (ackEntry == null ? null : ackEntry.key));
-
+                        //给客户端发送udp
                         udpPush(ackEntry);
                     }
                 } catch (Exception e) {
@@ -332,6 +347,7 @@ public class PushService implements ApplicationContextAware, ApplicationListener
         return serviceName + UtilsAndCommons.CACHE_KEY_SPLITER + agent;
     }
 
+    //服务信息变化则触发ServiceChangeEvent事件
     public void serviceChanged(Service service) {
         // merge some change events to reduce the push frequency:
         if (futureMap.containsKey(UtilsAndCommons.assembleFullServiceName(service.getNamespaceId(), service.getName()))) {
@@ -383,6 +399,11 @@ public class PushService implements ApplicationContextAware, ApplicationListener
         ackMap.clear();
     }
 
+    /**
+     * PushClient封装了要推送的目标服务地址等信息，它提供了zombie方法来判断目标服务是否zombie，
+     * 它判断距离lastRefTime的时间差是否超过switchDomain指定的该serviceName的PushCacheMillis(默认为10秒)，
+     * 超过则判定为zombie。
+     */
     public class PushClient {
         private String namespaceId;
         private String serviceName;
@@ -574,6 +595,14 @@ public class PushService implements ApplicationContextAware, ApplicationListener
         }
     }
 
+    /**
+     * udpPush方法会根据Receiver.AckEntry的信息进行判断，如果其重试次数大于MAX_RETRY_TIMES则终止push，将其从ackMap、udpSendTimeMap中移除；
+     * 如果可以重试则将其ackEntry.key放入ackMap及udpSendTimeMap，
+     * 然后执行udpSocket.send(ackEntry.origin)及ackEntry.increaseRetryTime()，
+     * 并注册Retransmitter的延时任务；如果出现异常则将其从ackMap、udpSendTimeMap移除。
+     * @param ackEntry
+     * @return
+     */
     private static Receiver.AckEntry udpPush(Receiver.AckEntry ackEntry) {
         if (ackEntry == null) {
             Loggers.PUSH.error("[NACOS-PUSH] ackEntry is null.");
@@ -596,6 +625,7 @@ public class PushService implements ApplicationContextAware, ApplicationListener
             udpSendTimeMap.put(ackEntry.key, System.currentTimeMillis());
 
             Loggers.PUSH.info("send udp packet: " + ackEntry.key);
+            //发送udp
             udpSocket.send(ackEntry.origin);
 
             ackEntry.increaseRetryTime();
@@ -635,6 +665,10 @@ public class PushService implements ApplicationContextAware, ApplicationListener
         }
     }
 
+    /**
+     * Receiver实现了Runnable接口，其run方法使用while true循环来执行udpSocket.receive，之后解析AckPacket，
+     * 从ackMap移除该ackKey，更新pushCostMap，同时从udpSendTimeMap移除该ackKey.
+     */
     public static class Receiver implements Runnable {
         @Override
         public void run() {

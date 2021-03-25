@@ -61,7 +61,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * <p>
  * At mean time every Nacos server receives data sync of other Nacos server, so every Nacos
  * server will eventually have a complete set of data.
- *
+ *Nacos中为了实现AP，自己定制了一套Distro协议
+ * 在Distro中所有的数据都是用内存进行保存，如果宕机怎么恢复？？ 看load方法！！！！
  * @author nkorange
  * @since 1.0.0
  */
@@ -102,6 +103,7 @@ public class DistroConsistencyServiceImpl implements EphemeralConsistencyService
 
 	@PostConstruct
 	public void init() {
+	    //初始启动执行全量拉取
 		GlobalExecutor.submit(loadDataTask);
 		GlobalExecutor.submitDistroNotifyTask(notifier);
 	}
@@ -123,8 +125,12 @@ public class DistroConsistencyServiceImpl implements EphemeralConsistencyService
 		}
 	}
 
+    /**
+     *从别的服务器进行全量数据拉取操作，只需要执行一次即可，剩下的交由增量同步任务去完成
+     * @throws Exception
+     */
 	public void load() throws Exception {
-		if (ApplicationUtils.getStandaloneMode()) {
+		if (ApplicationUtils.getStandaloneMode()) {//单例部署 无需同步
 			initialized = true;
 			return;
 		}
@@ -136,13 +142,14 @@ public class DistroConsistencyServiceImpl implements EphemeralConsistencyService
 
 		for (Map.Entry<String, Member> entry : memberManager.getServerList().entrySet()) {
 			final String address = entry.getValue().getAddress();
-			if (NetUtils.localServer().equals(address)) {
+			if (NetUtils.localServer().equals(address)) {//判断是否是自己
 				continue;
 			}
 			if (Loggers.DISTRO.isDebugEnabled()) {
 				Loggers.DISTRO.debug("sync from " + address);
 			}
 			// try sync data from remote server:
+            // 从别的服务器进行全量数据拉取操作，只需要执行一次即可，剩下的交由增量同步任务去完成
 			if (syncAllDataFromRemote(address)) {
 				initialized = true;
 				return;
@@ -150,12 +157,26 @@ public class DistroConsistencyServiceImpl implements EphemeralConsistencyService
 		}
 	}
 
+    /**
+     * 为了防止长时间各个节点数据不一致，
+     * 在DistroConsistencyService的Put方法中会对TaskDispatcher添加一个任务
+     * @param key   key of data, this key should be globally unique
+     * @param value value of data
+     * @throws NacosException
+     */
 	@Override
 	public void put(String key, Record value) throws NacosException {
+	    //onPut在判断key是ephemeralInstanceListKey时会创建一个Datum，递增其timestamp，然后放到dataStore中。
+        //并且把变化事件添加到tasks任务队列中，Notifier线程遍历tasks任务触发pushService的serviceChangeEvnet
 		onPut(key, value);
-		taskDispatcher.addTask(key);
+		taskDispatcher.addTask(key);//把同步任务放入blockingQueue,TaskScheduler线程任务不断从queue中取出执行。
 	}
 
+    /**
+     * 服务删除
+     * @param key key of data
+     * @throws NacosException
+     */
 	@Override
 	public void remove(String key) throws NacosException {
 		onRemove(key);
@@ -167,6 +188,14 @@ public class DistroConsistencyServiceImpl implements EphemeralConsistencyService
 		return dataStore.get(key);
 	}
 
+    /**
+     *onPut在判断key是ephemeralInstanceListKey时会创建一个Datum，递增其timestamp，
+     * 然后放到dataStore中，最后调用notifier.addTask(key, ApplyAction.CHANGE)
+     *
+     * 并且把变化事件添加到tasks任务队列中，Notifier线程遍历tasks任务触发pushService的serviceChangeEvnet
+     * @param key
+     * @param value
+     */
 	public void onPut(String key, Record value) {
 
 		if (KeyBuilder.matchEphemeralInstanceListKey(key)) {
@@ -184,6 +213,11 @@ public class DistroConsistencyServiceImpl implements EphemeralConsistencyService
 		notifier.addTask(key, ApplyAction.CHANGE);
 	}
 
+    /**
+     * 将数据从dataStore中删除，
+     * 并且把变化事件添加到tasks任务队列中
+     * @param key
+     */
 	public void onRemove(String key) {
 
 		dataStore.remove(key);
@@ -191,10 +225,15 @@ public class DistroConsistencyServiceImpl implements EphemeralConsistencyService
 		if (!listeners.containsKey(key)) {
 			return;
 		}
-
+        //把变化事件添加到tasks任务队列中
 		notifier.addTask(key, ApplyAction.DELETE);
 	}
 
+    /**
+     * 根据发生变化的key，主动取发出广播的服务器拉取。
+     * @param checksumMap
+     * @param server
+     */
 	public void onReceiveChecksums(Map<String, String> checksumMap, String server) {
 
 		if (syncChecksumTasks.containsKey(server)) {
@@ -202,14 +241,17 @@ public class DistroConsistencyServiceImpl implements EphemeralConsistencyService
 			Loggers.DISTRO.warn("sync checksum task already in process with {}", server);
 			return;
 		}
-
+        // 标记当前 Server 传来的数据正在处理
 		syncChecksumTasks.put(server, "1");
 
 		try {
-
+            // 需要更新的 key
 			List<String> toUpdateKeys = new ArrayList<>();
+            // 需要删除的 Key
 			List<String> toRemoveKeys = new ArrayList<>();
+            // 对传来的数据进行遍历操作
 			for (Map.Entry<String, String> entry : checksumMap.entrySet()) {
+                // 如果传来的数据存在由本节点负责的数据，则直接退出本次数据同步操作（违反了权威server的设定要求）
 				if (distroMapper.responsible(KeyBuilder.getServiceName(entry.getKey()))) {
 					// this key should not be sent from remote server:
 					Loggers.DISTRO.error("receive responsible key timestamp of " + entry
@@ -217,7 +259,7 @@ public class DistroConsistencyServiceImpl implements EphemeralConsistencyService
 					// abort the procedure:
 					return;
 				}
-
+                // 如果当前数据存储容器不存在这个数据，或者校验值不一样，则进行数据更新操作
 				if (!dataStore.contains(entry.getKey())
 						|| dataStore.get(entry.getKey()).value == null || !dataStore
 						.get(entry.getKey()).value.getChecksum()
@@ -226,12 +268,13 @@ public class DistroConsistencyServiceImpl implements EphemeralConsistencyService
 				}
 			}
 
+            // 直接遍历本地数据存储容器的所有数据
 			for (String key : dataStore.keys()) {
-
+                // 如果数据不是 发送广播过来的server 负责的，则跳过。
 				if (!server.equals(distroMapper.mapSrv(KeyBuilder.getServiceName(key)))) {
 					continue;
 				}
-
+                // 如果同步的数据不包含这个key，表明这个key是需要被删除的
 				if (!checksumMap.containsKey(key)) {
 					toRemoveKeys.add(key);
 				}
@@ -241,7 +284,7 @@ public class DistroConsistencyServiceImpl implements EphemeralConsistencyService
 				Loggers.DISTRO.info("to remove keys: {}, to update keys: {}, source: {}",
 						toRemoveKeys, toUpdateKeys, server);
 			}
-
+            // 执行数据删除操作
 			for (String key : toRemoveKeys) {
 				onRemove(key);
 			}
@@ -251,6 +294,7 @@ public class DistroConsistencyServiceImpl implements EphemeralConsistencyService
 			}
 
 			try {
+                // 根据需要更新的key进行数据拉取，然后对同步的数据进行操作，剩下的如同最开始的全量数据同步所做的操作
 				byte[] result = NamingProxy.getData(toUpdateKeys, server);
 				processData(result);
 			}
@@ -428,6 +472,7 @@ public class DistroConsistencyServiceImpl implements EphemeralConsistencyService
 
 					try {
 						if (action == ApplyAction.CHANGE) {
+						    //通过service类触发pushService的serviceChange事件
 							listener.onChange(datumKey, dataStore.get(datumKey).value);
 							continue;
 						}

@@ -19,7 +19,7 @@ import com.alibaba.nacos.config.server.utils.event.EventDispatcher.Event;
 import org.apache.commons.lang3.StringUtils;
 
 /**
- * 指数据发布事件。
+ * 数据发布事件。
  *
  * @author Nacos
  */
